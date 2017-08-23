@@ -18,7 +18,7 @@ bool WINAPI hkCreateMove( float flInputSampleTime , VCStructs::CUserCmd* pCmd )
 	bool IsInForceFullUpdate    = *(int*)(Vars->m_dwClientState + Vars->m_nDeltaTick) == -1; // ForceFullUpdate can cause crash
 	UTIL_TraceLine_t TraceLine 	= (UTIL_TraceLine_t)Vars->m_dwUTIL_TraceLine;
 	
-	if (pCmd->command_number && IsInGame && pLocalPlayer/* && !IsInForceFullUpdate*/)
+	if (pCmd->command_number && IsInGame && pLocalPlayer && !IsInForceFullUpdate)
 	{
 		bool localIsAlive = !*(bool*)(pLocalPlayer + Vars->m_lifeState);
 		if (localIsAlive) // Check LocalPlayer IsAlive
