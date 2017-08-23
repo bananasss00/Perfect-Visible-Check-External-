@@ -1,38 +1,37 @@
 #include "Main.h"
 COffsets* Offsets = new COffsets();
-CVisibleCheck* VisibleCheck = new CVisibleCheck();
+CVisibleCheck* VisibleCheck;
 
 ProcMem Meme;
-DWORD Client;
-DWORD ClientSize;
-DWORD Engine;
-DWORD EngineSize;
-DWORD LocalBase;
+
+DWORD Client; DWORD ClientSize;
+DWORD Engine; DWORD EngineSize;
+
 CEntity LocalPlayer;
 CEntity Entity[64];
-GlowObjectDefinition_t glowObj;
 
 /* PRE-CALL FUNCTION'S */
-DWORD WINAPI data(LPVOID lpParam);
-DWORD WINAPI ESP(LPVOID lpParam);
+void 	InitializeVisibleCheck();
+DWORD 	WINAPI data(LPVOID lpParam);
+DWORD 	WINAPI ESP(LPVOID lpParam);
 
 int main()
 {
 	Meme.Process("csgo.exe");
-	Client = Meme.Module("client.dll");
-	ClientSize = Meme.ModuleSize("client.dll");
-	Engine = Meme.Module("engine.dll");
-	EngineSize = Meme.ModuleSize("engine.dll");
+	Client = Meme.Module("client.dll"); ClientSize = Meme.ModuleSize("client.dll");
+	Engine = Meme.Module("engine.dll"); EngineSize = Meme.ModuleSize("engine.dll");
 	
 	SetConsoleTitle("pVisibleCheck");
 	cout << "Found csgo.exe" << endl;
 	
+	InitializeVisibleCheck();
+	
 	system("cls");
 	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleTextAttribute(hConsole, 10);
-	cout << "[GlowESP]" << endl;
+	cout << "       [GlowESP]" << endl;
 	cout << "========================" << endl;
-	cout << "visible = green" << endl;
+	cout << "visible     = green" << endl;
 	cout << "not_visible = white" << endl;
 	cout << "========================" << endl;
 	
@@ -45,6 +44,42 @@ int main()
 	return(0);
 }
 
+void InitializeVisibleCheck()
+{
+	VisibleCheck = new CVisibleCheck(Meme.hProcess);
+	
+	// Find offsets
+	DWORD m_dwIClientMode, m_dwUTIL_TraceLine;
+	
+	m_dwIClientMode = Meme.SigScan(Client, ClientSize, "\x8B\x0D\x00\x00\x00\x00\xFF\x75\x08\x8B\x01\xFF\x50\x64", "xx????xxxxxxxx") + 0x2;
+	m_dwIClientMode = Meme.Read<DWORD>(m_dwIClientMode);
+	m_dwIClientMode = Meme.Read<DWORD>(m_dwIClientMode);
+	
+	m_dwUTIL_TraceLine = Meme.SigScan(Client, ClientSize, "\x55\x8B\xEC\x83\xE4\xF0\x83\xEC\x7C\x56\x52", "xxxxxxxxxxx");
+	
+	DWORD m_dwClientState = Meme.Read<DWORD>(Engine + Offsets->m_dwClientState);
+	DWORD m_dwLocalPlayer = Client + Offsets->m_dwLocalPlayer;
+	DWORD m_dwEntityList = Client + Offsets->m_dwEntityList;
+	
+	// Set hook
+	VisibleCheck->InitCreateMoveHook(
+			m_dwIClientMode, 
+			m_dwUTIL_TraceLine,
+			m_dwLocalPlayer,
+			m_dwEntityList,
+			m_dwClientState,
+			Offsets->m_dwBoneMatrix,
+			Offsets->m_vecViewOffset,
+			Offsets->m_vecOrigin,
+			Offsets->m_lifeState,
+			Offsets->m_iTeamNum,
+			Offsets->m_iHealth,
+			Offsets->m_bDormant);
+}
+	
+/* --------------- */
+/*   LOCAL DATA    */
+/* --------------- */
 void CEntity::ReadInfo(DWORD dwBase)
 {
 	this->dwBase	= dwBase;
@@ -54,15 +89,12 @@ void CEntity::ReadInfo(DWORD dwBase)
 	bDormant 		= Meme.Read<bool>(dwBase + Offsets->m_bDormant);
 	isAlive 		= !Meme.Read<bool>(dwBase + Offsets->m_lifeState);
 }
-	
-/* --------------- */
-/*   LOCAL DATA    */
-/* --------------- */
+
+/* Get Data - Thread */
 DWORD WINAPI data(LPVOID lpParam)
 {
-	VisibleCheck->InitCreateMoveHook();
 	while (true) {
-		LocalBase = Meme.Read<DWORD>(Client + Offsets->m_dwLocalPlayer);
+		DWORD LocalBase = Meme.Read<DWORD>(Client + Offsets->m_dwLocalPlayer);
 		LocalPlayer.ReadInfo(LocalBase);
 		
 		for (int i = 0; i < 64; i++)
@@ -83,6 +115,8 @@ DWORD WINAPI data(LPVOID lpParam)
 /* --------------- */
 /*       GLOW      */
 /* --------------- */
+GlowObjectDefinition_t glowObj;
+
 GlowColor CGreen = { 0.f, 0.4f, 0.f, 1.f};
 GlowColor CYellow = { 0.4f, 0.4f, 0.f, 1.f};
 GlowColor CRed = { 0.4f, 0.f, 0.f, 1.f};
@@ -116,7 +150,7 @@ CEntity* GetEntityByBase(DWORD dwBase, int& loopId)
     return nullptr;
 }
 
-/* ESP */
+/* GlowESP - Thread */
 DWORD WINAPI ESP(LPVOID lpParam)
 {	
 	while (true) {

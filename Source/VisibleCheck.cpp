@@ -1,24 +1,30 @@
 #include "VisibleCheck.h"
 
 #pragma optimize( "", off )
-bool WINAPI hkCreateMove( float flInputSampleTime , CUserCmd* pCmd )
+typedef int(__fastcall* UTIL_TraceLine_t)(const VCStructs::Vector&, 
+                                          const VCStructs::Vector&, 
+										  unsigned int, 
+										  const DWORD, 
+										  int, 
+										  DWORD);
+										  
+bool WINAPI hkCreateMove( float flInputSampleTime , VCStructs::CUserCmd* pCmd )
 {
-	hkCreateMoveVars_t* Vars = (hkCreateMoveVars_t*)0x00123456; 		// hkCreateMove + 0x9 = pointer to Vars; 
-																		// Initialize in InitCreateMoveHook()
+	VCStructs::hkCreateMoveVars_t* Vars = (VCStructs::hkCreateMoveVars_t*)0x00123456; // hkCreateMove + 0x9 = pointer to Vars; 
+																					  // Initialize in InitCreateMoveHook()
 	
 	DWORD pLocalPlayer 			= *(DWORD*)(Vars->m_dwLocalPlayer);
+	bool IsInGame 				= *(int*)(Vars->m_dwClientState + 0x108) == 6; 	// 0x108 = m_dwInGame
 	UTIL_TraceLine_t TraceLine 	= (UTIL_TraceLine_t)Vars->m_dwUTIL_TraceLine;
-	DWORD dwClientState 		= *(DWORD*)(Vars->m_dwClientState);
 	
-	bool IsInGame 				= *(int*)(dwClientState + 0x108) == 6; 	// 0x108 = m_dwInGame
 	if (pCmd->command_number && IsInGame && pLocalPlayer)
 	{
 		bool localIsAlive = !*(bool*)(pLocalPlayer + Vars->m_lifeState);
 		if (localIsAlive) // Check LocalPlayer IsAlive
 		{
 			// Get Local Player EyePosition 
-			Vars->localOrigin = *(Vector*)(pLocalPlayer + Vars->m_vecOrigin);
-			Vars->localViewOffset = *(Vector*)(pLocalPlayer + Vars->m_vecViewOffset);
+			Vars->localOrigin 		 = *(VCStructs::Vector*)(pLocalPlayer + Vars->m_vecOrigin);
+			Vars->localViewOffset 	 = *(VCStructs::Vector*)(pLocalPlayer + Vars->m_vecViewOffset);
 			Vars->localEyePosition.x = Vars->localOrigin.x + Vars->localViewOffset.x;
 			Vars->localEyePosition.y = Vars->localOrigin.y + Vars->localViewOffset.y;
 			Vars->localEyePosition.z = Vars->localOrigin.z + Vars->localViewOffset.z;
@@ -66,14 +72,25 @@ bool WINAPI hkCreateMove( float flInputSampleTime , CUserCmd* pCmd )
 DWORD WINAPI hkCreateMoveEnd(){return 0;}
 #pragma optimize( "", on )
 
+CVisibleCheck::CVisibleCheck(HANDLE hProcess)
+{
+	hooked = false; this->hProcess = hProcess;
+	
+	for (int i = 0; i < sizeof(visibleStruct.player); i++)
+	{
+		visibleStruct.player[i] = false;
+	}
+}
+	
 bool CVisibleCheck::UpdateVisibleStruct()
 {
 	if (!hooked)
 		return false;
 	if (!dwVisibleStruct)
 		return false;
-		
-	visibleStruct = Meme.Read<visibleStruct_t>(dwVisibleStruct);
+	if (!ReadProcessMemory(hProcess, (LPVOID)dwVisibleStruct, &visibleStruct, sizeof(visibleStruct_t), NULL))
+		return false;
+	
 	return true;
 }
 bool CVisibleCheck::IsVisible(int entityId)
@@ -85,66 +102,99 @@ bool CVisibleCheck::IsVisible(int entityId)
 	
 	return visibleStruct.player[entityId];
 }
-bool CVisibleCheck::InitCreateMoveHook()
+bool CVisibleCheck::InitCreateMoveHook(
+			DWORD m_dwIClientMode, 
+			DWORD m_dwUTIL_TraceLine,
+			DWORD m_dwLocalPlayer,
+			DWORD m_dwEntityList,
+			DWORD m_dwClientState,
+			DWORD m_dwBoneMatrix,
+			DWORD m_vecViewOffset,
+			DWORD m_vecOrigin,
+			DWORD m_lifeState,
+			DWORD m_iTeamNum,
+			DWORD m_iHealth,
+			DWORD m_bDormant)
 {
 	if (hooked)
 		return true;
-		
-	DWORD m_dwIClientMode, m_dwUTIL_TraceLine;
 	
-	// Find offsets
-	m_dwIClientMode = Meme.SigScan(Client, ClientSize, "\x8B\x0D\x00\x00\x00\x00\xFF\x75\x08\x8B\x01\xFF\x50\x64", "xx????xxxxxxxx") + 0x2;
-	m_dwIClientMode = Meme.Read<DWORD>(m_dwIClientMode);
-	m_dwIClientMode = Meme.Read<DWORD>(m_dwIClientMode);
-	
-	m_dwUTIL_TraceLine = Meme.SigScan(Client, ClientSize, "\x55\x8B\xEC\x83\xE4\xF0\x83\xEC\x7C\x56\x52", "xxxxxxxxxxx");
-	
-	printf("m_dwIClientMode %X\n", m_dwIClientMode);
-	printf("m_dwUTIL_TraceLine %X\n", m_dwUTIL_TraceLine);
-	
-	if (!m_dwIClientMode || !m_dwUTIL_TraceLine || !Offsets->m_dwLocalPlayer || !Offsets->m_dwEntityList)
+	// Check offsets
+	if (!m_dwIClientMode)
+		return false;
+	if (!m_dwUTIL_TraceLine)
+		return false;
+	if (!m_dwLocalPlayer)
+		return false;
+	if (!m_dwEntityList)
+		return false;
+	if (!m_dwClientState)
+		return false;
+	if (!m_dwBoneMatrix)
+		return false;
+	if (!m_vecViewOffset)
+		return false;
+	if (!m_vecOrigin)
+		return false;
+	if (!m_lifeState)
+		return false;
+	if (!m_iTeamNum)
+		return false;
+	if (!m_iHealth)
+		return false;
+	if (!m_bDormant)
 		return false;
 	
 	// Set CreateMove local Vars
-	hkCreateMoveVars_t hkCreateMoveVars;
+	VCStructs::hkCreateMoveVars_t hkCreateMoveVars;
+	hkCreateMoveVars.m_dwClientState 		= m_dwClientState;
+	hkCreateMoveVars.m_dwEntityList 		= m_dwEntityList;
+	hkCreateMoveVars.m_dwLocalPlayer 		= m_dwLocalPlayer;
+	hkCreateMoveVars.m_dwBoneMatrix 		= m_dwBoneMatrix;
+	hkCreateMoveVars.m_vecViewOffset 		= m_vecViewOffset;
+	hkCreateMoveVars.m_vecOrigin 			= m_vecOrigin;
+	hkCreateMoveVars.m_lifeState 			= m_lifeState;
+	hkCreateMoveVars.m_iTeamNum 			= m_iTeamNum;
+	hkCreateMoveVars.m_iHealth 				= m_iHealth;
+	hkCreateMoveVars.m_bDormant 			= m_bDormant;
 	hkCreateMoveVars.m_dwUTIL_TraceLine 	= m_dwUTIL_TraceLine;
-	hkCreateMoveVars.m_dwClientState 		= Engine + Offsets->m_dwClientState;
-	hkCreateMoveVars.m_dwEntityList 		= Client + Offsets->m_dwEntityList;
-	hkCreateMoveVars.m_dwLocalPlayer 		= Client + Offsets->m_dwLocalPlayer;
-	hkCreateMoveVars.m_dwBoneMatrix 		= Offsets->m_dwBoneMatrix;
-	hkCreateMoveVars.m_vecViewOffset 		= Offsets->m_vecViewOffset;
-	hkCreateMoveVars.m_vecOrigin 			= Offsets->m_vecOrigin;
-	hkCreateMoveVars.m_lifeState 			= Offsets->m_lifeState;
-	hkCreateMoveVars.m_iTeamNum 			= Offsets->m_iTeamNum;
-	hkCreateMoveVars.m_iHealth 				= Offsets->m_iHealth;
-	hkCreateMoveVars.m_bDormant 			= Offsets->m_bDormant;
 	hkCreateMoveVars.min_fraction			= 0.97f;
 	
-	hkCreateMoveVars.m_dwTraceOutput 	= (DWORD)VirtualAllocEx(Meme.hProcess, NULL, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	hkCreateMoveVars.visibleStruct 		= (visibleStruct_t*)VirtualAllocEx(Meme.hProcess, NULL, sizeof(visibleStruct_t), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	LPVOID shellCodeAddress 			= VirtualAllocEx(Meme.hProcess, NULL, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	// Allocate memory for result TraceLine function
+	hkCreateMoveVars.m_dwTraceOutput = 
+		(DWORD)VirtualAllocEx(hProcess, NULL, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	
+	// Allocate memory for visibleStruct
+	hkCreateMoveVars.visibleStruct = 
+		(visibleStruct_t*)VirtualAllocEx(hProcess, NULL, sizeof(visibleStruct_t), MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	
+	// Allocate memory for Hook
+	LPVOID hookCodeAddress = 
+		VirtualAllocEx(hProcess, NULL, 4096, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 	
 	printf("hkCreateMoveVars.m_dwTraceOutput %X\n", hkCreateMoveVars.m_dwTraceOutput);
 	printf("hkCreateMoveVars.visibleStruct %X\n", (DWORD)hkCreateMoveVars.visibleStruct);
 	
-	if (!hkCreateMoveVars.m_dwTraceOutput || !hkCreateMoveVars.visibleStruct || !(DWORD)shellCodeAddress)
+	if (!hkCreateMoveVars.m_dwTraceOutput || !hkCreateMoveVars.visibleStruct || !(DWORD)hookCodeAddress)
 		return false;
 	
-	if (!WriteProcessMemory(Meme.hProcess, shellCodeAddress, hkCreateMove, (DWORD)hkCreateMoveEnd - (DWORD)hkCreateMove, NULL))
+	// Write hkCreateMove function in to CSGO
+	if (!WriteProcessMemory(hProcess, hookCodeAddress, hkCreateMove, (DWORD)hkCreateMoveEnd - (DWORD)hkCreateMove, NULL))
 		return false;
 	
-	DWORD dw_hkCreateMoveVars = (DWORD)shellCodeAddress + (DWORD)hkCreateMoveEnd - (DWORD)hkCreateMove;
-	if (!WriteProcessMemory(Meme.hProcess, (LPVOID)dw_hkCreateMoveVars, &hkCreateMoveVars, sizeof(hkCreateMoveVars_t), NULL))
+	// Write hkCreateMoveVars(Local Variables for CreateMove hook)
+	DWORD dw_hkCreateMoveVars = (DWORD)hookCodeAddress + (DWORD)hkCreateMoveEnd - (DWORD)hkCreateMove;
+	if (!WriteProcessMemory(hProcess, (LPVOID)dw_hkCreateMoveVars, &hkCreateMoveVars, sizeof(VCStructs::hkCreateMoveVars_t), NULL))
 		return false;
 	
 	// Set pointer to hkCreateMoveVars
-	if (!WriteProcessMemory(Meme.hProcess, (LPVOID)((DWORD)shellCodeAddress + 0x9), &dw_hkCreateMoveVars, sizeof(DWORD), NULL))
+	if (!WriteProcessMemory(hProcess, (LPVOID)((DWORD)hookCodeAddress + 0x9), &dw_hkCreateMoveVars, sizeof(DWORD), NULL))
 		return false;
 	
-	printf("hkCreateMoveAdress %X\n", (DWORD)shellCodeAddress);
+	printf("hkCreateMoveAdress %X\n", (DWORD)hookCodeAddress);
 	system("pause");
 	
-	Hook(m_dwIClientMode, 24, (DWORD)shellCodeAddress);
+	Hook(m_dwIClientMode, 24, (DWORD)hookCodeAddress);
 	
 	dwVisibleStruct = (DWORD)hkCreateMoveVars.visibleStruct;
 	hooked = true;
@@ -153,7 +203,8 @@ bool CVisibleCheck::InitCreateMoveHook()
 
 DWORD CVisibleCheck::GetVFunc(DWORD inst, int Index)
 {
-	DWORD table = Meme.Read<DWORD>(inst);
+	DWORD table;
+	ReadProcessMemory(hProcess, (LPVOID)inst, &table, sizeof(DWORD), NULL);
 	DWORD func = table + sizeof(DWORD) * Index;
 	return func;
 }
@@ -161,7 +212,8 @@ DWORD CVisibleCheck::GetVFunc(DWORD inst, int Index)
 void CVisibleCheck::Hook(DWORD Instance, int Index, DWORD HookFunc)
 {
 	uintptr_t VFunc = GetVFunc(Instance, Index);
-	Meme.Protection<DWORD>(VFunc);
-	Meme.Write<DWORD>(VFunc, HookFunc);
-	Meme.Protection<DWORD>(VFunc);
+	DWORD dwProtection;
+	VirtualProtectEx(hProcess, (LPVOID)VFunc, sizeof(DWORD), PAGE_EXECUTE_READWRITE, &dwProtection);
+	WriteProcessMemory(hProcess, (LPVOID)VFunc, &HookFunc, sizeof(DWORD), NULL);
+	VirtualProtectEx(hProcess, (LPVOID)VFunc, sizeof(DWORD), dwProtection, &dwProtection);
 }

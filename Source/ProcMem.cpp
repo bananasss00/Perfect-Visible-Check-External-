@@ -75,7 +75,7 @@ void ProcMem::Process(char* ProcessName) {
 		}
 	while (Process32Next(hPID, &ProcEntry));
 
-	cout << "You haven't even started the game yet lol";
+	cout << "You haven't even started the game yet lol" << endl;
 	system("pause");
 	exit(0);
 }
