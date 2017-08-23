@@ -44,11 +44,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Source\Entity.cpp" />
+    <ClCompile Include="Source\GlowESP.cpp" />
     <ClCompile Include="source\Main.cpp" />
     <ClCompile Include="source\ProcMem.cpp" />
     <ClCompile Include="source\VisibleCheck.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\Entity.h" />
+    <ClInclude Include="Source\GlowESP.h" />
     <ClInclude Include="source\Main.h" />
     <ClInclude Include="source\ProcMem.h" />
     <ClInclude Include="source\VisibleCheck.h" />

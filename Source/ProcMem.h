@@ -93,6 +93,7 @@ public:
 	DWORD SigScan(DWORD start, DWORD size, const char* sig, const char* mask);
 	DWORD FindPatternArray(DWORD start, DWORD size, LPCSTR mask, int count, ...);
 	bool DataCompare(const BYTE* pData, const BYTE* pMask, LPCSTR pszMask);
+	bool Read( DWORD_PTR dwAddress, LPVOID lpBuffer, DWORD_PTR dwSize );
 #pragma endregion	
 
 };

@@ -12,6 +12,7 @@ public:
 				DWORD m_dwLocalPlayer,
 				DWORD m_dwEntityList,
 				DWORD m_dwClientState,
+				DWORD m_nDeltaTick,
 				DWORD m_dwBoneMatrix,
 				DWORD m_vecViewOffset,
 				DWORD m_vecOrigin,
@@ -52,6 +53,7 @@ namespace VCStructs
 		DWORD m_dwClientState;
 		DWORD m_dwEntityList;
 		DWORD m_dwLocalPlayer;
+		DWORD m_nDeltaTick;
 		DWORD m_dwBoneMatrix;
 		DWORD m_vecViewOffset;
 		DWORD m_vecOrigin;

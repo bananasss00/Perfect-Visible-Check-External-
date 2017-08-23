@@ -3,7 +3,10 @@
 #include <TlHelp32.h>
 #include <iostream>
 #include <thread>
+
 #include "ProcMem.h"
+#include "Entity.h"
+#include "GlowESP.h"
 #include "VisibleCheck.h"
 
 using namespace std;
@@ -24,45 +27,10 @@ public:
 	DWORD m_bDormant = 0xE9;
 	DWORD m_iIndex = 0x64;
 };
-
-class CEntity
-{
-public:
-	DWORD 	dwBase;
-	int 	iTeam;
-	int		iIndex;
-	int 	iHealth;
-	bool	bDormant;
-	bool	isAlive;
-	
-	void ReadInfo(DWORD dwBase);
-};
-
-struct GlowObjectDefinition_t
-{
-	DWORD dwBase;
-	float r;
-	float g;
-	float b;
-	float a;
-	uint8_t unk1[16];
-	bool m_bRenderWhenOccluded;
-	bool m_bRenderWhenUnoccluded;
-	bool m_bFullBloom;
-	uint8_t unk2[14];
-};
-	
-struct GlowColor
-{
-	float r;
-	float g;
-	float b;
-	float a;
-};
+extern COffsets* Offsets;
 
 extern ProcMem Meme;
 extern DWORD Client;
 extern DWORD ClientSize;
 extern DWORD Engine;
 extern DWORD EngineSize;
-extern COffsets* Offsets;

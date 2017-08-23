@@ -15,9 +15,10 @@ bool WINAPI hkCreateMove( float flInputSampleTime , VCStructs::CUserCmd* pCmd )
 	
 	DWORD pLocalPlayer 			= *(DWORD*)(Vars->m_dwLocalPlayer);
 	bool IsInGame 				= *(int*)(Vars->m_dwClientState + 0x108) == 6; 	// 0x108 = m_dwInGame
+	bool IsInForceFullUpdate    = *(int*)(Vars->m_dwClientState + Vars->m_nDeltaTick) == -1; // ForceFullUpdate can cause crash
 	UTIL_TraceLine_t TraceLine 	= (UTIL_TraceLine_t)Vars->m_dwUTIL_TraceLine;
 	
-	if (pCmd->command_number && IsInGame && pLocalPlayer)
+	if (pCmd->command_number && IsInGame && pLocalPlayer/* && !IsInForceFullUpdate*/)
 	{
 		bool localIsAlive = !*(bool*)(pLocalPlayer + Vars->m_lifeState);
 		if (localIsAlive) // Check LocalPlayer IsAlive
@@ -108,6 +109,7 @@ bool CVisibleCheck::InitCreateMoveHook(
 			DWORD m_dwLocalPlayer,
 			DWORD m_dwEntityList,
 			DWORD m_dwClientState,
+			DWORD m_nDeltaTick,
 			DWORD m_dwBoneMatrix,
 			DWORD m_vecViewOffset,
 			DWORD m_vecOrigin,
@@ -130,6 +132,8 @@ bool CVisibleCheck::InitCreateMoveHook(
 		return false;
 	if (!m_dwClientState)
 		return false;
+	if (!m_nDeltaTick)
+		return false;
 	if (!m_dwBoneMatrix)
 		return false;
 	if (!m_vecViewOffset)
@@ -150,6 +154,7 @@ bool CVisibleCheck::InitCreateMoveHook(
 	hkCreateMoveVars.m_dwClientState 		= m_dwClientState;
 	hkCreateMoveVars.m_dwEntityList 		= m_dwEntityList;
 	hkCreateMoveVars.m_dwLocalPlayer 		= m_dwLocalPlayer;
+	hkCreateMoveVars.m_nDeltaTick 			= m_nDeltaTick;
 	hkCreateMoveVars.m_dwBoneMatrix 		= m_dwBoneMatrix;
 	hkCreateMoveVars.m_vecViewOffset 		= m_vecViewOffset;
 	hkCreateMoveVars.m_vecOrigin 			= m_vecOrigin;

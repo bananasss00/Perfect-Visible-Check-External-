@@ -268,4 +268,11 @@ DWORD ProcMem::SigScan(DWORD start, DWORD size, const char* sig, const char* mas
     return NULL;
 }
 
+bool ProcMem::Read( DWORD_PTR dwAddress, LPVOID lpBuffer, DWORD_PTR dwSize )
+{
+	SIZE_T Out = NULL;
+
+	return ( ReadProcessMemory( hProcess, ( LPCVOID )dwAddress, lpBuffer, dwSize, &Out ) == TRUE );
+}
+
 #pragma endregion
